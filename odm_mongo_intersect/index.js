@@ -1,60 +1,114 @@
-import mongoose from 'mongoose';
-import {getdata} from './api.js';
-const { Schema, model } = mongoose;
-let uri = 'mongodb://127.0.0.1:27017/intersect';
-//trayendo la data del api
-const query = await getdata().then(data=> {
-   console.log(data);
-   return data;
- }).catch(error => {
-   console.log('no va');
-   process.exit(0);
- });
+import mongoose from 'mongoose'
+import { getdata } from './api.js'
+const { Schema, model } = mongoose
 
-/*Valorar el caso en que query sea un array de strins como*/ 
-/*let query = {
-  intersect: ["DARWIN"], // Ahora es un array de strings
-};*/
-console.log(query);
-const options = {
-   autoIndex: false, // Don't build indexes
-   maxPoolSize: 10, // Maintain up to 10 socket connections
-   serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-   socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-   family: 4 // Use IPv4, skip trying IPv6
- };
-  mongoose.connect(uri, options).then(
-   () => { console.log('se ha conectado exitosamente')
+const studentSchema = new mongoose.Schema(
+  {
+    student_data: {
+      ID: {
+        type: String,
+        required: true,
+        index: true
       },
-   err => { console.log('no se ha podido conectar') }
-   );
-    
-   const intersectSchema = new mongoose.Schema({
-	   
-	  // Caso 1: Array de objetos
-	  intersect: [{
-		edificio: { type: String, required: true }  
-	  }],
-	  // Caso 2: Cadena
-	  edificio:{type: String}
-	  // Caso 3: Array de strings
-	 /* intersect: [{
-		type: String, required: true   
-	  }],*/
-   });
-   
-   let intersect =new mongoose.model('intersect', intersectSchema);
-   console.log(intersect)
-   try {
-	   
-	 let intersect_a = await intersect.insertOne(query.intersect);
-	 let intersect_b = await intersect.insertOne(query.intersect[0]);
-	// let intersect_c = await intersect.insertOne(query);
-	// console.log(intersect_a);
-	 process.exit(0);
-	} catch (e) {
-	 console.log('Some error');
-	 console.log(e);
-	 process.exit(0);
-	}
-   
+      name: {
+        type: String,
+        required: true
+      },
+      dept_name: {
+        type: String,
+        required: true
+      },
+      tot_cred: {
+        type: Number,
+        required: true
+      }
+    },
+    status_matricula: {
+      type: String,
+      enum: ['No matriculado', 'Matriculado'],
+      default: 'No matriculado'
+    },
+    matricula: [
+      {
+        type: String,
+        enum: ['Primera', 'Segunda', 'Tercera']
+      }
+    ],
+    academic_info: {
+      total_courses: Number,
+      unique_semesters: [String],
+      years_enrolled: [Number]
+    },
+    courses: [
+      {
+        course_id: { type: String, required: true },
+        sec_id: { type: String, required: true },
+        semester: {
+          type: String,
+          enum: ['Fall', 'Spring', 'Summer'],
+          required: true
+        },
+        year: {
+          type: Number,
+          required: true
+        },
+        grade: String
+      }
+    ]
+  },
+  {
+    timestamps: true
+  }
+)
+
+let Student = mongoose.model('Student', studentSchema)
+
+const uri = 'mongodb://127.0.0.1:27017/intersect'
+const options = {
+  autoIndex: true,
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4
+}
+
+try {
+  await mongoose.connect(uri, options)
+  console.log('Connected to MongoDB')
+
+  // Clear existing data
+  await Student.deleteMany({})
+
+  // Get data from API
+  const data = await getdata()
+
+  // Transform and save the data
+  const students = data.students.map(student => {
+    const uniqueSemesters = [...new Set(student.courses?.map(c => c.semester) || [])]
+    const uniqueYears = [...new Set(student.courses?.map(c => c.year) || [])]
+
+    return {
+      student_data: student.student_data,
+      status_matricula: student.courses?.length > 0 ? 'Matriculado' : 'No matriculado',
+      matricula: ['Primera'],
+      academic_info: {
+        total_courses: student.courses?.length || 0,
+        unique_semesters: uniqueSemesters,
+        years_enrolled: uniqueYears
+      },
+      courses: student.courses || []
+    }
+  })
+
+  // Insert the transformed data
+  const result = await Student.insertMany(students, {
+    ordered: false,
+    validateBeforeSave: true
+  })
+  console.log(`Inserted ${result.length} students successfully`)
+} catch (error) {
+  console.error('Error:', error)
+} finally {
+  await mongoose.connection.close()
+  process.exit(0)
+}

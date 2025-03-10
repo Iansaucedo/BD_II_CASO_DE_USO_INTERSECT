@@ -1,37 +1,43 @@
 <?php
 /**
- * @OA\Info(title="My API", version="1.0")
+ * @OA\Info(title="University API", version="1.0")
  */
 include_once 'ManageDB.php';
 
- /**
+/**
  * @OA\Get(
  *     path="/getdata",
- *     summary="Fetch data from the database",
+ *     summary="Fetch student and department data with additional fields",
  *     @OA\Response(
  *         response=200,
  *         description="Successful response",
- *         @OA\JsonContent(type="array", @OA\Items(type="object"))
+ *         @OA\JsonContent(
+ *             type="object",
+ *             @OA\Property(property="students", type="array", @OA\Items(type="object")),
+ *             @OA\Property(property="departments", type="array", @OA\Items(type="object"))
+ *         )
  *     )
  * )
  */
- 
-header('Content-Type: application/json');
 
-class GetData{
-	public function getAll(){
-    	$queries = new ManageBD();//tiene la conección a la bd
-    	$queries_res = $queries->getQueries();//trae la query a la BD
-		foreach($queries_res as $key => $res){
-			$data[$key]=[];
-    	while ($row = $res->fetch(PDO::FETCH_ASSOC)) {
-			$data[$key][]= $row;
-		}
-	   }
-		return $data;
-	 }
-	}
-	/*echo "<pre>";
-	print_r($keys);
-	echo "</pre>";*/
+class GetData {
+    public function getAll() {
+        try {
+            $queries = new ManageBD();
+            $queries_res = $queries->getQueries();
+            
+            if (!$queries_res || !isset($queries_res['students']) || !isset($queries_res['departments'])) {
+                throw new Exception('Error fetching data from database');
+            }
+
+            return $queries_res;
+            
+        } catch (Exception $e) {
+            return [
+                'error' => true,
+                'message' => $e->getMessage()
+            ];
+        }
+    }
+}
 ?>

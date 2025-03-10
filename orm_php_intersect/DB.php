@@ -7,12 +7,12 @@ class DB{
     private $charset;
 
     public function __construct(){
-       $this->host= 'localhost';
-        $this->db= 'team1_exam';
-        $this->user= 'nodeuser';
-        $this->password ='node2024!';
-        //$this->charset = 'utf8mb4';*/
-    }
+        $this->host = 'localhost';
+        $this->db = 'uni_2025';  // Changed from uni_2025 to ejercicio
+        $this->user = 'newuser';
+        $this->password = 'newpassword';
+        $this->charset = 'utf8mb4';
+     }
     function connect(){
         try{
             $connection = "mysql:host=".$this->host.";dbname=" . $this->db ;
