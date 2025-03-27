@@ -4,40 +4,35 @@
  */
 include_once 'ManageDB.php';
 
-/**
- * @OA\Get(
- *     path="/getdata",
- *     summary="Fetch student and department data with additional fields",
- *     @OA\Response(
- *         response=200,
- *         description="Successful response",
- *         @OA\JsonContent(
- *             type="object",
- *             @OA\Property(property="students", type="array", @OA\Items(type="object")),
- *             @OA\Property(property="departments", type="array", @OA\Items(type="object"))
- *         )
- *     )
- * )
- */
-
 class GetData {
     public function getAll() {
         try {
-            $queries = new ManageBD();
-            $queries_res = $queries->getQueries();
+            $db = new CourseEnrollments();
             
-            if (!$queries_res || !isset($queries_res['students']) || !isset($queries_res['departments'])) {
-                throw new Exception('Error fetching data from database');
-            }
+            // Get only instructors data
+            $instructors = $db->getInstructorExcept();
 
-            return $queries_res;
+            // Return instructors data
+            return [
+                'status' => 'success',
+                'total_records' => count($instructors['instructors'] ?? []),
+                'instructors' => $instructors['instructors'] ?? []
+            ];
             
         } catch (Exception $e) {
             return [
-                'error' => true,
+                'status' => 'error',
                 'message' => $e->getMessage()
             ];
         }
     }
 }
+
+// Handle the request
+header('Content-Type: application/json');
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+$api = new GetData();
+echo json_encode($api->getAll(), JSON_PRETTY_PRINT);
+exit;
 ?>

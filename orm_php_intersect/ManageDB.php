@@ -1,67 +1,87 @@
 <?php
 include_once 'DB.php';
-class ManageBD extends DB {
-    public function getQueries() {
-        // Get all students with their detailed course information
-        $students = $this->connect()->query("
-            SELECT 
-                s.*,
-                GROUP_CONCAT(
-                    DISTINCT
-                    JSON_OBJECT(
-                        'course_id', t.course_id,
-                        'sec_id', t.sec_id,
-                        'semester', t.semester,
-                        'year', t.year,
-                        'grade', COALESCE(t.grade, 'N/A')
-                    )
-                ) as courses,
-                COUNT(DISTINCT t.course_id) as course_count,
-                GROUP_CONCAT(DISTINCT t.semester) as enrolled_semesters,
-                GROUP_CONCAT(DISTINCT t.year) as enrolled_years
-            FROM student s
-            LEFT JOIN takes t ON s.ID = t.ID
-            GROUP BY s.ID, s.name, s.dept_name, s.tot_cred
-        ");
-        $studentData = $students->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Get all departments
-        $departments = $this->connect()->query("SELECT * FROM department");
-        $departmentData = $departments->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Enhanced student data enrichment
-        $enrichedStudents = array_map(function($student) {
-            $courses = $student['courses'] ? json_decode('[' . $student['courses'] . ']', true) : [];
-            
-            // Calculate academic statistics
-            $grades = array_column($courses, 'grade');
-            $uniqueSemesters = array_unique(array_column($courses, 'semester'));
-            $uniqueYears = array_unique(array_column($courses, 'year'));
-            
-            return [
-                'student_data' => [
-                    'ID' => $student['ID'],
-                    'name' => $student['name'],
-                    'dept_name' => $student['dept_name'],
-                    'tot_cred' => $student['tot_cred']
-                ],
-                'academic_info' => [
-                    'total_courses' => count($courses),
-                    'unique_semesters' => $uniqueSemesters,
-                    'years_enrolled' => $uniqueYears,
-                ],
-                'status_matricula' => !empty($courses) ? 'Matriculado' : 'No matriculado',
-                'matricula' => ['Primera'],
-                'courses' => $courses
-            ];
-        }, $studentData);
 
-        $queries = array(
-            "students" => $enrichedStudents,
-            "departments" => $departmentData
-        );
+class CourseEnrollments extends DB {
+    public function getInstructorExcept() {
+        $query = $this->connect()->query("
+        SELECT * FROM (
+            SELECT i.* 
+            FROM instructor i 
+            WHERE salary > 90000
+        ) AS set_1
+        EXCEPT
+        SELECT * FROM (
+            SELECT i.* 
+            FROM instructor i 
+            WHERE i.dept_name IN ('Music', 'Physics')
+        ) AS set_2
+        ORDER BY salary DESC
+    ");
+    
+    $instructors = $query->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Transform data into structured format
+    $formattedData = array_map(function($instructor) {
+        return [
+            'instructor_info' => [
+                'ID' => $instructor['ID'],
+                'name' => $instructor['name'],
+                'dept_name' => $instructor['dept_name'],
+                'salary' => (float)$instructor['salary']
+            ]
+        ];
+    }, $instructors);
+    
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => 'success',
+        'total_records' => count($formattedData),
+        'instructors' => array_values($formattedData)
+    ], JSON_PRETTY_PRINT);
+    exit;
+}
+
+    public function getEnrollments() {
+        $query = $this->connect()->query("
+            SELECT DISTINCT 
+                c.course_id,
+                c.title,
+                c.dept_name,
+                c.credits,
+                t.ID as student_id,
+                t.sec_id,
+                t.semester,
+                t.year
+            FROM course AS c 
+            NATURAL JOIN takes AS t
+            ORDER BY c.course_id, t.year, t.semester
+        ");
         
-        return $queries;
+        $enrollments = $query->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Transform data into structured format
+        $formattedData = array_map(function($enrollment) {
+            return [
+                'course_info' => [
+                    'course_id' => $enrollment['course_id'],
+                    'title' => $enrollment['title'],
+                    'dept_name' => $enrollment['dept_name'],
+                    'credits' => (int)$enrollment['credits'],
+                    'ID' => $enrollment['student_id'],
+                    'sec_id' => $enrollment['sec_id'],
+                    'semester' => $enrollment['semester'],
+                    'year' => (int)$enrollment['year']
+                ]
+            ];
+        }, $enrollments);
+        
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'success',
+            'total_records' => count($formattedData),
+            'enrollments' => array_values($formattedData)  // Ensure sequential array
+        ], JSON_PRETTY_PRINT);
+        exit;
     }
 }
 ?>
